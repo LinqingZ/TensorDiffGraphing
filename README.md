@@ -12,9 +12,10 @@ To get started with the project, follow these steps:
 2. Navigate to the project directory.
 
 Next, install the required dependencies by using pip:
-
-```
+<pre>
+```bash
 pip install -r requirements.txt
-'''
+```
+</pre>
 
 Then run the mainWindow.py file, it will pop up a python app to upload two tensor files.
