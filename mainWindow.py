@@ -1,7 +1,7 @@
 import sys
 import torch
 import numpy as np
-from PyQt6.QtWidgets import QApplication, QMainWindow, QSizePolicy, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFileDialog, QLineEdit, QPushButton, QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFileDialog, QLineEdit, QPushButton, QFileDialog, QMessageBox
 from heatmapWindow import Heatmap2DimenWindow, HeatmapMultiDimenWindow
 from histogramWindow import Histogram2DimenWindow,  HistogramMultiDimenWindow
 

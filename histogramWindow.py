@@ -1,11 +1,11 @@
-import numpy as np
+import torch
 import mplcursors
 import matplotlib
+import numpy as np
 import matplotlib.pyplot as plt
 from PyQt6.QtWidgets import QSlider, QGroupBox, QComboBox, QSizePolicy, QWidget, QCheckBox, QFormLayout, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-import torch
 from PyQt6.QtCore import Qt
 from matplotlib.figure import Figure
 
