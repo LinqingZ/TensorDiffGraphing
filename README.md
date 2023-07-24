@@ -15,5 +15,6 @@ Next, install the required dependencies by using pip:
 
 ```bash
 pip install -r requirements.txt
+```bash
 
 Then run the mainWindow.py file, it will pop up a python app to upload two tensor files.
