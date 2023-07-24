@@ -1,3 +1,3 @@
 # Tensor Diff Visualization
-## pip install -r requirement.txt
+## pip install -r requirements.txt
 ## Run the mainWindow.py
