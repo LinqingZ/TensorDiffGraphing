@@ -1,11 +1,11 @@
-import torch
+import numpy as np
 import mplcursors
 import matplotlib
-import numpy as np
 import matplotlib.pyplot as plt
 from PyQt6.QtWidgets import QSlider, QGroupBox, QComboBox, QSizePolicy, QWidget, QCheckBox, QFormLayout, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import torch
 from PyQt6.QtCore import Qt
 from matplotlib.figure import Figure
 
@@ -70,7 +70,8 @@ class Histogram2DimenWindow(QWidget):
         self.axes = None
         self.bin_size = None
         self.log_base = None
-        self.factor = 1
+        self.original_xlim = None
+        # self.factor = 1
         
         self.errors_dict = calculateDifference(self.tensor1, self.tensor2).tensor_difference_dict()
         self.figure = plt.figure()
@@ -133,6 +134,10 @@ class Histogram2DimenWindow(QWidget):
         bin_size_text = self.bin_size_textbox.text()
         if bin_size_text.isdigit():
             self.bin_size = int(bin_size_text)
+            if self.bin_size > 100:
+                self.bin_size = 100
+            elif self.bin_size < 1:
+                self.bin_size = 1
             self.slider.setValue(self.bin_size)
     
     def zoom_graph(self, event):
@@ -143,7 +148,8 @@ class Histogram2DimenWindow(QWidget):
                 (xlim[0] - event.xdata) * scale_factor + event.xdata,
                 (xlim[1] - event.xdata) * scale_factor + event.xdata
             )
-
+            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
+            
             self.axes.set_xlim(new_xlim)
             self.canvas.draw()
     
@@ -154,6 +160,8 @@ class Histogram2DimenWindow(QWidget):
         if self.log_base != None:
             self.axes.set_yscale('log', base=self.log_base)
         frequencies, self.bins, patches = self.axes.hist(self.errors_dict[self.dropdown.currentText()].flatten(), bins=self.bin_size)
+        if self.original_xlim is None:
+            self.original_xlim = self.axes.get_xlim()
         
         self.axes.set_xlabel('Value')
         self.axes.set_ylabel('Frequency')
@@ -190,6 +198,7 @@ class Canvas(FigureCanvas):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.axes = self.figure.add_subplot(111)
         self.histogram = None
+        self.original_xlim = None
     
     def clear_canvas(self):
         self.figure.clear()
@@ -205,6 +214,8 @@ class Canvas(FigureCanvas):
         if log_base != None:
             self.axes.set_yscale('log', base=log_base)
         frequencies, bins, patches = self.axes.hist(errors_dict[text].flatten(), bins=bin_size)
+        if self.original_xlim is None:
+            self.original_xlim = self.axes.get_xlim()
         
         self.axes.set_xlabel('Value')
         self.axes.set_ylabel('Frequency')
@@ -238,7 +249,7 @@ class Canvas(FigureCanvas):
                 (xlim[0] - event.xdata) * scale_factor + event.xdata,
                 (xlim[1] - event.xdata) * scale_factor + event.xdata
             )
-            
+            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
             self.axes.set_xlim(new_xlim)
             self.draw()
 
@@ -291,14 +302,14 @@ class HistogramMultiDimenWindow(QWidget):
             
             dropdown = QComboBox()
             for j in range(tensor_shape[i]):
-                dropdown.addItem(f"Axis {j}")
+                dropdown.addItem(f"Index {j}")
             dropdown.currentIndexChanged.connect(lambda index, checkbox=checkbox: self.dropdown_changed(index, checkbox))
             dropdown.setCurrentIndex(0)
             self.axis_dropdowns.append(dropdown)
         
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setMinimum(1)
-        self.slider.setMaximum(100)
+        self.slider.setMaximum(1000)
         self.slider.setTickInterval(1)
         self.slider.setSingleStep(1)
         self.slider.setValue(10)
@@ -362,6 +373,18 @@ class HistogramMultiDimenWindow(QWidget):
                 self.selected_checkboxes.remove(checkbox)
             dropdown = self.axis_dropdowns[self.checkboxes.index(checkbox)]
             dropdown.setEnabled(True)  # Enable the associated dropdown
+        self.freeze_unselected_checkboxes()
+    
+    def freeze_unselected_checkboxes(self):
+        if len(self.selected_checkboxes) >= 2:
+            for checkbox in self.checkboxes:
+                if checkbox not in self.selected_checkboxes:
+                    checkbox.setEnabled(False)
+                else:
+                    checkbox.setEnabled(True)
+        else:
+            for checkbox in self.checkboxes:
+                checkbox.setEnabled(True)
     
     def dropdown_changed(self, index, checkbox):
         if index != 0:
@@ -401,4 +424,4 @@ class HistogramMultiDimenWindow(QWidget):
     
     def reset_graph(self):
         self.canvas.clear_canvas()
-        self.canvas.draw_histogram(self.dropdown.currentText(), self.errors_dict, self.bin_size)  # Call draw_histogram with the current selected text
+        self.canvas.draw_histogram(self.dropdown.currentText(), self.errors_dict, self.bin_size, self.log_base)  # Call draw_histogram with the current selected text

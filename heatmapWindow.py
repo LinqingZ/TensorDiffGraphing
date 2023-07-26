@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QGroupBox, QComboBox, QSizePolicy, QWidget, QCheckBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import torch
+from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
 
 class calculateDifference:
@@ -56,6 +57,8 @@ class Heatmap2DimenWindow(QWidget):
         self.tensor1 = tensor1
         self.tensor2 = tensor2
         self.errors_dict = {}
+        self.original_xlim = None
+        self.original_ylim = None
         
         self.errors_dict = calculateDifference(self.tensor1, self.tensor2).tensor_difference_dict()
         self.figure = plt.figure()
@@ -91,7 +94,12 @@ class Heatmap2DimenWindow(QWidget):
         try:
             heatmap_data = self.errors_dict[text]
             if heatmap_data.shape[0] > 0 and heatmap_data.shape[1] > 0:
-                self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1)
+                self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1, norm=LogNorm())
+                # self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1)
+                # Store the original heatmap data's range
+                if self.original_xlim is None:
+                    self.original_xlim = self.axes.get_xlim()
+                    self.original_ylim = self.axes.get_ylim()
             else:
                 print("Invalid heatmap data shape:", heatmap_data.shape)
                 return
@@ -110,11 +118,12 @@ class Heatmap2DimenWindow(QWidget):
             value_l1 = self.errors_dict["L1 Error"][x, y]
             value_l2 = self.errors_dict["L2 Error"][x, y]
             value_relative = self.errors_dict["Relative Error"][x, y]
-            sel.annotation.set_text(f"Tensor Location:({int(x)}, {int(y)})\nTensor Difference:{value_tensor_diff:.20f}\nL1 Error:{value_l1:.20f}\nL2 Error:{value_l2:.20f}\nRelative Error:{value_relative:.20f}")
+            sel.annotation.set_text(f"Tensor Location: ({int(x)}, {int(y)})\nTensor 1: {self.tensor1[x, y]}\nTensor 2: {self.tensor2[x, y]}\nTensor Difference: {value_tensor_diff:.20f}\nL1 Error: {value_l1:.20f}\nL2 Error: {value_l2:.20f}\nRelative Error: {value_relative:.20f}")
         
         self.figure.colorbar(self.heatmap)
         
         self.canvas.mpl_connect('scroll_event', self.zoom_heatmap)
+        
         self.canvas.draw()
     
     def reset_graph(self):
@@ -148,9 +157,17 @@ class Heatmap2DimenWindow(QWidget):
                 (ylim[1] - event.ydata) * scale_factor + event.ydata
             )
             
+            # # Check if the new limits exceed the original limits and adjust if needed
+            # if new_xlim[0] < self.original_xlim[0] or new_xlim[1] > self.original_xlim[1]:
+            #     new_xlim = self.original_xlim
+            # if new_ylim[0] > self.original_ylim[0] or new_ylim[1] < self.original_ylim[1]:
+            #     new_ylim = self.original_ylim
+            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
+            new_ylim = (min(self.original_ylim[0], new_ylim[0]), max(self.original_ylim[1], new_ylim[1]))
+            
             # Set the new limits to the heatmap
-            self.axes.set_xlim(new_xlim)
-            self.axes.set_ylim(new_ylim)
+            self.axes.set_xlim((new_xlim[0], new_xlim[1]))
+            self.axes.set_ylim((new_ylim[0], new_ylim[1]))
             
             # Redraw the heatmap
             self.canvas.draw()
@@ -163,6 +180,8 @@ class Canvas(FigureCanvas):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.axes = self.figure.add_subplot(111)
         self.heatmap = None
+        self.original_xlim = None
+        self.original_ylim = None
     
     def clear_canvas(self):
         self.figure.clear()
@@ -172,14 +191,19 @@ class Canvas(FigureCanvas):
     def get_figure(self):
         return self.figure
     
-    def draw_heatmap(self, text, errors_dict):
+    def draw_heatmap(self, text, errors_dict, tensor1, tensor2):
         self.clear_canvas()
         self.axes = self.figure.add_subplot(111)
         
         try:
             heatmap_data = errors_dict[text]
             if heatmap_data.shape[0] > 0 and heatmap_data.shape[1] > 0:
-                self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1)
+                # self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1)
+                self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1, norm=LogNorm())
+                # Store the original heatmap data's range
+                if self.original_xlim is None:
+                    self.original_xlim = self.axes.get_xlim()
+                    self.original_ylim = self.axes.get_ylim()
             else:
                 print("Invalid heatmap data shape:", heatmap_data.shape)
                 return
@@ -198,7 +222,7 @@ class Canvas(FigureCanvas):
             value_l1 = errors_dict["L1 Error"][x, y]
             value_l2 = errors_dict["L2 Error"][x, y]
             value_relative = errors_dict["Relative Error"][x, y]
-            sel.annotation.set_text(f"Tensor Location:({int(x)}, {int(y)})\nTensor Difference:{value_tensor_diff:.20f}\nL1 Error:{value_l1:.20f}\nL2 Error:{value_l2:.20f}\nRelative Error:{value_relative:.20f}")
+            sel.annotation.set_text(f"Tensor Location: ({int(x)}, {int(y)})\nTensor 1: {tensor1[x, y]}\nTensor 2: {tensor2[x, y]}\nTensor Difference: {value_tensor_diff:.20f}\nL1 Error: {value_l1:.20f}\nL2 Error: {value_l2:.20f}\nRelative Error: {value_relative:.20f}")
         
         self.figure.colorbar(self.heatmap, ax=self.axes)
         self.mpl_connect('scroll_event', self.zoom_heatmap)
@@ -228,6 +252,9 @@ class Canvas(FigureCanvas):
                 (ylim[1] - event.ydata) * scale_factor + event.ydata
             )
             
+            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
+            new_ylim = (min(self.original_ylim[0], new_ylim[0]), max(self.original_ylim[1], new_ylim[1]))
+            
             self.axes.set_xlim(new_xlim)
             self.axes.set_ylim(new_ylim)
             
@@ -240,6 +267,8 @@ class HeatmapMultiDimenWindow(QWidget):
         self.tensor1 = tensor1
         self.tensor2 = tensor2
         self.errors_dict = {}
+        self.tensor1_2d = None
+        self.tensor2_2d = None
         
         self.checkboxes = []
         self.dropdowns = []
@@ -266,7 +295,7 @@ class HeatmapMultiDimenWindow(QWidget):
         group_box_layout.addLayout(select_dimen_layout)
         group_box_layout.addWidget(self.canvas)
         
-        self.dropdown.currentTextChanged.connect(lambda text: self.canvas.draw_heatmap(text, self.errors_dict))
+        self.dropdown.currentTextChanged.connect(lambda text: self.canvas.draw_heatmap(text, self.errors_dict, self.tensor1_2d, self.tensor2_2d))
         self.color_button.clicked.connect(self.canvas.change_color)
         
         main_layout.addWidget(group_box)
@@ -282,9 +311,9 @@ class HeatmapMultiDimenWindow(QWidget):
         print("selected_dimensions", selected_dimensions)
         print("fixed_dimensions", fixed_dimensions)
         print("indices", indices)
-        tensor1_2d = self.tensor1[tuple(indices)]
-        tensor2_2d = self.tensor2[tuple(indices)]
-        return tensor1_2d, tensor2_2d
+        self.tensor1_2d = self.tensor1[tuple(indices)]
+        self.tensor2_2d = self.tensor2[tuple(indices)]
+        # return tensor1_2d, tensor2_2d
     
     def create_widgets(self):
         tensor_shape = self.tensor1.shape
@@ -296,7 +325,7 @@ class HeatmapMultiDimenWindow(QWidget):
             
             dropdown = QComboBox()
             for j in range(tensor_shape[i]):
-                dropdown.addItem(f"Axis {j}")
+                dropdown.addItem(f"Index {j}")
             dropdown.currentIndexChanged.connect(lambda index, checkbox=checkbox: self.dropdown_changed(index, checkbox))
             dropdown.setCurrentIndex(0)  # Set default value
             self.dropdowns.append(dropdown)
@@ -329,6 +358,18 @@ class HeatmapMultiDimenWindow(QWidget):
                 self.selected_checkboxes.remove(checkbox)
             dropdown = self.dropdowns[self.checkboxes.index(checkbox)]
             dropdown.setEnabled(True)  # Enable the associated dropdown
+        self.freeze_unselected_checkboxes()
+    
+    def freeze_unselected_checkboxes(self):
+        if len(self.selected_checkboxes) >= 2:
+            for checkbox in self.checkboxes:
+                if checkbox not in self.selected_checkboxes:
+                    checkbox.setEnabled(False)
+                else:
+                    checkbox.setEnabled(True)
+        else:
+            for checkbox in self.checkboxes:
+                checkbox.setEnabled(True)
     
     def dropdown_changed(self, index, checkbox):
         if index != 0:  # Option 1 is not selected
@@ -348,10 +389,11 @@ class HeatmapMultiDimenWindow(QWidget):
             remaining_axes = [all_axes[dim] for dim in remaining_dimensions]
             fixed_dimensions = dict(zip(remaining_dimensions, remaining_axes))
             print("selected_dimensions, fixed_dimensions", selected_dimensions, fixed_dimensions)
-            tensor1_2d, tensor2_2d= self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
-            print("tensor1_2d", tensor1_2d.shape)
-            self.errors_dict = calculateDifference(tensor1_2d, tensor2_2d).tensor_difference_dict()
-            self.canvas.draw_heatmap(self.dropdown.currentText(), self.errors_dict)
+            # tensor1_2d, tensor2_2d= self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
+            self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
+            print("tensor1_2d", self.tensor1_2d.shape)
+            self.errors_dict = calculateDifference(self.tensor1_2d, self.tensor2_2d).tensor_difference_dict()
+            self.canvas.draw_heatmap(self.dropdown.currentText(), self.errors_dict, self.tensor1_2d, self.tensor2_2d)
         else:
             QMessageBox.warning(self, "Graph", "Please select exactly two checkboxes.")
     
@@ -367,4 +409,4 @@ class HeatmapMultiDimenWindow(QWidget):
     
     def reset_graph(self):
         self.canvas.clear_canvas()
-        self.canvas.draw_heatmap(self.dropdown.currentText(), self.errors_dict)  # Call draw_heatmap with the current selected text
+        self.canvas.draw_heatmap(self.dropdown.currentText(), self.errors_dict, self.tensor1_2d, self.tensor2_2d)  # Call draw_heatmap with the current selected text
