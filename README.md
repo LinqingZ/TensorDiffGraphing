@@ -18,13 +18,13 @@ pip install -r requirements.txt
 Then run the mainWindow.py file, it will pop up a python app to upload two tensor files.
 
 ## Debug
-If you are running the code on Linux, Error may occur:
+Error may occur, Use ```sudo apt-get install libgl1 libgle3-dev``` to resolve the issue.
 ```
 File "mainWindow.py", line 4, in <module>
     from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFileDialog, QLineEdit, QPushButton, QFileDialog, QMessageBox
 ImportError: libxkbcommon.so.0: cannot open shared object file: No such file or directory
 ```
-Use ```sudo apt-get install libgl1 libgle3-dev``` to resolve the issue.
+
 
 ```
 File "mainWindow.py", line 4, in <module>
