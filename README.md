@@ -32,4 +32,5 @@ File "mainWindow.py", line 4, in <module>
 ImportError: libEGL.so.1: cannot open shared object file: No such file or directory
 ```
 Solution
+
 ```sudo apt-get install libgl1 libgle3-dev```
