@@ -2,11 +2,11 @@ import numpy as np
 import mplcursors
 import matplotlib
 import matplotlib.pyplot as plt
-from PyQt6.QtWidgets import QSlider, QGroupBox, QComboBox, QSizePolicy, QWidget, QCheckBox, QFormLayout, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+from PyQt6.QtWidgets import QSlider, QGroupBox, QComboBox, QSizePolicy, QWidget, QCheckBox, QFormLayout, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import torch
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from matplotlib.figure import Figure
 
 class My_Axes(matplotlib.axes.Axes):
@@ -34,7 +34,7 @@ class calculateDifference:
         return relative_error.numpy()
     
     def tensor_difference_dict(self):
-        tensor_diff = self.tensor_a - self.tensor_b
+        tensor_diff = (self.tensor_a - self.tensor_b).numpy()
         l1_loss = self.l1_loss()
         l2_loss = self.l2_loss()
         rel_error = self.relative_error()
@@ -71,7 +71,6 @@ class Histogram2DimenWindow(QWidget):
         self.bin_size = None
         self.log_base = None
         self.original_xlim = None
-        # self.factor = 1
         
         self.errors_dict = calculateDifference(self.tensor1, self.tensor2).tensor_difference_dict()
         self.figure = plt.figure()
@@ -79,7 +78,7 @@ class Histogram2DimenWindow(QWidget):
         
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setMinimum(1)
-        self.slider.setMaximum(100)
+        self.slider.setMaximum(900)
         self.slider.setTickInterval(1)
         self.slider.setSingleStep(1)
         self.slider.setValue(10)
@@ -99,27 +98,87 @@ class Histogram2DimenWindow(QWidget):
         self.log_checkbox.stateChanged.connect(self.update_log_base)
         
         main_layout = QVBoxLayout(self)
-        group_box = QGroupBox("Bin Size")
-        layout = QVBoxLayout(group_box)
-        layout.addWidget(self.slider)
-        layout.addWidget(self.bin_size_textbox)
-        layout.addWidget(self.dropdown)
-        layout.addWidget(self.log_checkbox)
-        layout.addWidget(self.plot_button)
         
-        button_layout = QVBoxLayout()
-        button_layout.addWidget(self.canvas)
+        group_box_inner = QGroupBox("Bin Size")
+        inner_layout = QHBoxLayout(group_box_inner)
+        left_layout = QFormLayout()
+        left_layout.addRow(self.slider)
+        left_layout.addRow(self.bin_size_textbox)
+        left_layout.addRow(self.dropdown)
+        left_layout.addRow(self.log_checkbox)
+        left_layout.addRow(self.plot_button)
         
+        
+        self.mean_label = QLabel()
+        self.median_label = QLabel()
+        self.max_label = QLabel()
+        self.min_label = QLabel()
+        self.std_label = QLabel()
+        self.percentiles_label_25 = QLabel()
+        self.percentiles_label_50 = QLabel()
+        self.percentiles_label_75 = QLabel()
+        
+        left_layout.addRow(QLabel("<b>Min: </b>"))
+        left_layout.addRow(self.min_label)
+        
+        left_layout.addRow(QLabel("<b>Max: </b>"))
+        left_layout.addRow(self.max_label)
+        
+        left_layout.addRow(QLabel("<b>Median: </b>"))
+        left_layout.addRow(self.median_label)
+        
+        left_layout.addRow(QLabel("<b>Mean (Average): </b>"))
+        left_layout.addRow(self.mean_label)
+        
+        left_layout.addRow(QLabel("<b>Standard Deviation (SD): </b>"))
+        left_layout.addRow(self.std_label)
+        
+        left_layout.addRow(QLabel("<b>Percentiles 25th: </b>"))
+        left_layout.addRow(self.percentiles_label_25)
+        
+        left_layout.addRow(QLabel("<b>Percentiles 50th: </b>"))
+        left_layout.addRow(self.percentiles_label_50)
+        
+        left_layout.addRow(QLabel("<b>Percentiles 75th: </b>"))
+        left_layout.addRow(self.percentiles_label_75)
+        
+        right_layout = QVBoxLayout()
         self.toolbar = CustomNavigationToolbar(self.canvas, self)
-        layout.addWidget(self.toolbar)
+        right_layout.addWidget(self.toolbar)
+        right_layout.addWidget(self.canvas)
         
-        layout.addLayout(button_layout)
-        main_layout.addWidget(group_box)
-        # self.setLayout(layout1)
+        
+        inner_layout.addLayout(left_layout, 1)
+        inner_layout.addLayout(right_layout, 7)
+        
+        main_layout.addWidget(group_box_inner)
         
         self.axes = None
         self.draw_histogram()
         self.showMaximized()
+    
+    def update_statistics(self, data_tensor):
+        mean_value = np.mean(data_tensor)
+        median_value = np.median(data_tensor)
+        max_value = np.max(data_tensor)
+        # max_location = np.unravel_index(np.argmax(data_tensor), data_tensor.shape)
+        min_value = np.min(data_tensor)
+        # min_location = np.unravel_index(np.argmin(data_tensor), data_tensor.shape)
+        std_deviation = np.std(data_tensor)
+        # variance = np.var(data_tensor)
+        # percentiles = np.percentile(data_tensor, [25, 50, 75])
+        percentiles_25 = np.percentile(data_tensor, 25)
+        percentiles_50 = np.percentile(data_tensor, 50)
+        percentiles_75 = np.percentile(data_tensor, 75)
+
+        self.mean_label.setText(f"{mean_value:.10e}")
+        self.median_label.setText(f"{median_value:.10e}")
+        self.max_label.setText(f"{max_value:.10e}")
+        self.min_label.setText(f"{min_value:.10e}")
+        self.std_label.setText(f"{std_deviation:.10e}")
+        self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
+        self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
+        self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
     
     def update_log_base(self):
         if self.log_checkbox.isChecked():
@@ -134,10 +193,6 @@ class Histogram2DimenWindow(QWidget):
         bin_size_text = self.bin_size_textbox.text()
         if bin_size_text.isdigit():
             self.bin_size = int(bin_size_text)
-            if self.bin_size > 100:
-                self.bin_size = 100
-            elif self.bin_size < 1:
-                self.bin_size = 1
             self.slider.setValue(self.bin_size)
     
     def zoom_graph(self, event):
@@ -157,21 +212,27 @@ class Histogram2DimenWindow(QWidget):
         self.figure.clear()
         self.bin_size = int(self.bin_size_textbox.text())
         self.axes = self.figure.add_subplot(111, projection="My_Axes")
-        if self.log_base != None:
-            self.axes.set_yscale('log', base=self.log_base)
-        frequencies, self.bins, patches = self.axes.hist(self.errors_dict[self.dropdown.currentText()].flatten(), bins=self.bin_size)
-        if self.original_xlim is None:
-            self.original_xlim = self.axes.get_xlim()
-        
-        self.axes.set_xlabel('Value')
-        self.axes.set_ylabel('Frequency')
-        self.axes.set_title('Histogram')
-        
-        # Assign different colors to each bin
-        cmap = plt.get_cmap('viridis')
-        bin_colors = cmap(np.linspace(0, 1, len(patches)))
-        for patch, color in zip(patches, bin_colors):
-            patch.set_facecolor(color)
+        try:
+            histogram_data = self.errors_dict[self.dropdown.currentText()]
+            if self.log_base != None:
+                self.axes.set_yscale('log', base=self.log_base)
+            frequencies, self.bins, patches = self.axes.hist(histogram_data.flatten(), bins=self.bin_size)
+            self.update_statistics(histogram_data)
+            if self.original_xlim is None:
+                self.original_xlim = self.axes.get_xlim()
+            
+            self.axes.set_xlabel('Value')
+            self.axes.set_ylabel('Frequency')
+            self.axes.set_title('Histogram')
+            
+            # Assign different colors to each bin
+            cmap = plt.get_cmap('viridis')
+            bin_colors = cmap(np.linspace(0, 1, len(patches)))
+            for patch, color in zip(patches, bin_colors):
+                patch.set_facecolor(color)
+        except Exception as e:
+            print("Error creating histogram:", e)
+            return
         
         # Create the mplcursors cursor
         cursor = mplcursors.cursor(patches, hover=True)
@@ -211,21 +272,26 @@ class Canvas(FigureCanvas):
     def draw_histogram(self, text, errors_dict, bin_size, log_base):
         self.clear_canvas()
         self.axes = self.figure.add_subplot(111, projection="My_Axes")
-        if log_base != None:
-            self.axes.set_yscale('log', base=log_base)
-        frequencies, bins, patches = self.axes.hist(errors_dict[text].flatten(), bins=bin_size)
-        if self.original_xlim is None:
-            self.original_xlim = self.axes.get_xlim()
-        
-        self.axes.set_xlabel('Value')
-        self.axes.set_ylabel('Frequency')
-        self.axes.set_title('Histogram')
-        
-        # Assign different colors to each bin
-        cmap = plt.get_cmap('viridis')
-        bin_colors = cmap(np.linspace(0, 1, len(patches)))
-        for patch, color in zip(patches, bin_colors):
-            patch.set_facecolor(color)
+        histogram_data = errors_dict[text]
+        try:
+            if log_base != None:
+                self.axes.set_yscale('log', base=log_base)
+            frequencies, bins, patches = self.axes.hist(histogram_data.flatten(), bins=bin_size)
+            if self.original_xlim is None:
+                self.original_xlim = self.axes.get_xlim()
+            
+            self.axes.set_xlabel('Value')
+            self.axes.set_ylabel('Frequency')
+            self.axes.set_title('Histogram')
+            
+            # Assign different colors to each bin
+            cmap = plt.get_cmap('viridis')
+            bin_colors = cmap(np.linspace(0, 1, len(patches)))
+            for patch, color in zip(patches, bin_colors):
+                patch.set_facecolor(color)
+        except Exception as e:
+            print("Error creating heatmap:", e)
+            return
         
         # Create the mplcursors cursor
         cursor = mplcursors.cursor(patches, hover=True)
@@ -269,15 +335,76 @@ class HistogramMultiDimenWindow(QWidget):
         self.canvas = Canvas()
         main_layout = QVBoxLayout(self)
         group_box = QGroupBox("Please select two dimensions to graph and fix the rest dimensions.")
-        group_box_layout = QVBoxLayout(group_box)      
+        group_box_layout = QHBoxLayout(group_box)      
         self.create_widgets()
         select_dimen_layout=self.create_layout()
         
-        group_box_layout.addLayout(select_dimen_layout)
-        group_box_layout.addWidget(self.canvas)
+        self.mean_label = QLabel()
+        self.median_label = QLabel()
+        self.max_label = QLabel()
+        self.min_label = QLabel()
+        self.std_label = QLabel()
+        self.percentiles_label_25 = QLabel()
+        self.percentiles_label_50 = QLabel()
+        self.percentiles_label_75 = QLabel()
+        
+        select_dimen_layout.addRow(QLabel("<b>Min: </b>"))
+        select_dimen_layout.addRow(self.min_label)
+        
+        select_dimen_layout.addRow(QLabel("<b>Max: </b>"))
+        select_dimen_layout.addRow(self.max_label)
+        
+        select_dimen_layout.addRow(QLabel("<b>Median: </b>"))
+        select_dimen_layout.addRow(self.median_label)
+        
+        select_dimen_layout.addRow(QLabel("<b>Mean (Average): </b>"))
+        select_dimen_layout.addRow(self.mean_label)
+        
+        select_dimen_layout.addRow(QLabel("<b>Standard Deviation (SD): </b>"))
+        select_dimen_layout.addRow(self.std_label)
+        
+        select_dimen_layout.addRow(QLabel("<b>Percentiles 25th: </b>"))
+        select_dimen_layout.addRow(self.percentiles_label_25)
+        
+        select_dimen_layout.addRow(QLabel("<b>Percentiles 50th: </b>"))
+        select_dimen_layout.addRow(self.percentiles_label_50)
+        
+        select_dimen_layout.addRow(QLabel("<b>Percentiles 75th: </b>"))
+        select_dimen_layout.addRow(self.percentiles_label_75)
+        
+        
+        group_box_layout.addLayout(select_dimen_layout, 1)
+        canvas_layout = QVBoxLayout()
+        canvas_layout.addWidget(self.toolbar)
+        canvas_layout.addWidget(self.canvas) 
+        
+        group_box_layout.addLayout(canvas_layout, 7)
         
         main_layout.addWidget(group_box)
         self.showMaximized()
+        
+    def update_statistics(self, data_tensor):
+        mean_value = np.mean(data_tensor)
+        median_value = np.median(data_tensor)
+        max_value = np.max(data_tensor)
+        # max_location = np.unravel_index(np.argmax(data_tensor), data_tensor.shape)
+        min_value = np.min(data_tensor)
+        # min_location = np.unravel_index(np.argmin(data_tensor), data_tensor.shape)
+        std_deviation = np.std(data_tensor)
+        # variance = np.var(data_tensor)
+        # percentiles = np.percentile(data_tensor, [25, 50, 75])
+        percentiles_25 = np.percentile(data_tensor, 25)
+        percentiles_50 = np.percentile(data_tensor, 50)
+        percentiles_75 = np.percentile(data_tensor, 75)
+
+        self.mean_label.setText(f"{mean_value:.10e}")
+        self.median_label.setText(f"{median_value:.10e}")
+        self.max_label.setText(f"{max_value:.10e}")
+        self.min_label.setText(f"{min_value:.10e}")
+        self.std_label.setText(f"{std_deviation:.10e}")
+        self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
+        self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
+        self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
     
     def slice_2d_tensor(self, selected_dimensions, fixed_dimensions):
         num_dims = self.tensor1.ndim
@@ -309,7 +436,7 @@ class HistogramMultiDimenWindow(QWidget):
         
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setMinimum(1)
-        self.slider.setMaximum(1000)
+        self.slider.setMaximum(900)
         self.slider.setTickInterval(1)
         self.slider.setSingleStep(1)
         self.slider.setValue(10)
@@ -320,6 +447,7 @@ class HistogramMultiDimenWindow(QWidget):
         
         self.graph_button = QPushButton("Plot Histogram")
         self.graph_button.clicked.connect(self.graph_button_clicked)
+        # self.graph_button.clicked.connect(self.update_statistics(self.errors_dict[self.dropdown.currentText()]))
         
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.reset_button_clicked)
@@ -341,7 +469,6 @@ class HistogramMultiDimenWindow(QWidget):
         layout.addRow(self.log_checkbox)
         layout.addRow(self.reset_button, self.dropdown)
         layout.addRow(self.graph_button)
-        layout.addRow(self.toolbar)
         return layout
     
     def update_log_base(self):
@@ -408,6 +535,7 @@ class HistogramMultiDimenWindow(QWidget):
             print("tensor1_2d", tensor1_2d.shape)
             self.errors_dict = calculateDifference(tensor1_2d, tensor2_2d).tensor_difference_dict()
             self.canvas.draw_histogram(self.dropdown.currentText(), self.errors_dict, self.bin_size, self.log_base)
+            self.update_statistics(self.errors_dict[self.dropdown.currentText()])
         else:
             QMessageBox.warning(self, "Graph", "Please select exactly two checkboxes.")
     
@@ -424,4 +552,5 @@ class HistogramMultiDimenWindow(QWidget):
     
     def reset_graph(self):
         self.canvas.clear_canvas()
-        self.canvas.draw_histogram(self.dropdown.currentText(), self.errors_dict, self.bin_size, self.log_base)  # Call draw_histogram with the current selected text
+        self.canvas.draw_histogram(self.dropdown.currentText(), self.errors_dict, self.bin_size, self.log_base)
+        self.update_statistics(self.errors_dict[self.dropdown.currentText()])
