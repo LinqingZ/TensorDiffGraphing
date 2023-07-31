@@ -126,7 +126,6 @@ class Heatmap2DimenWindow(QWidget):
         inner_layout.addLayout(left_layout, 1)
         inner_layout.addLayout(right_layout, 7)
         main_layout.addWidget(group_box)
-        # self.setLayout(group_box)
         
         self.axes = None
         self.draw_heatmap(self.dropdown.currentText())
@@ -140,12 +139,8 @@ class Heatmap2DimenWindow(QWidget):
         mean_value = np.mean(data_tensor)
         median_value = np.median(data_tensor)
         max_value = np.max(data_tensor)
-        # max_location = np.unravel_index(np.argmax(data_tensor), data_tensor.shape)
         min_value = np.min(data_tensor)
-        # min_location = np.unravel_index(np.argmin(data_tensor), data_tensor.shape)
         std_deviation = np.std(data_tensor)
-        # variance = np.var(data_tensor)
-        # percentiles = np.percentile(data_tensor, [25, 50, 75])
         percentiles_25 = np.percentile(data_tensor, 25)
         percentiles_50 = np.percentile(data_tensor, 50)
         percentiles_75 = np.percentile(data_tensor, 75)
@@ -231,11 +226,6 @@ class Heatmap2DimenWindow(QWidget):
                 (ylim[1] - event.ydata) * scale_factor + event.ydata
             )
             
-            # # Check if the new limits exceed the original limits and adjust if needed
-            # if new_xlim[0] < self.original_xlim[0] or new_xlim[1] > self.original_xlim[1]:
-            #     new_xlim = self.original_xlim
-            # if new_ylim[0] > self.original_ylim[0] or new_ylim[1] < self.original_ylim[1]:
-            #     new_ylim = self.original_ylim
             new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
             new_ylim = (min(self.original_ylim[0], new_ylim[0]), max(self.original_ylim[1], new_ylim[1]))
             
@@ -460,13 +450,11 @@ class HeatmapMultiDimenWindow(QWidget):
         for i in range(num_dims):
             if i not in selected_dimensions: 
                 indices[i] = fixed_dimensions[i]
-                # indices[i] = 0
         print("selected_dimensions", selected_dimensions)
         print("fixed_dimensions", fixed_dimensions)
         print("indices", indices)
         self.tensor1_2d = self.tensor1[tuple(indices)]
         self.tensor2_2d = self.tensor2[tuple(indices)]
-        # return tensor1_2d, tensor2_2d
     
     def create_widgets(self):
         tensor_shape = self.tensor1.shape
@@ -541,7 +529,6 @@ class HeatmapMultiDimenWindow(QWidget):
             remaining_axes = [all_axes[dim] for dim in remaining_dimensions]
             fixed_dimensions = dict(zip(remaining_dimensions, remaining_axes))
             print("selected_dimensions, fixed_dimensions", selected_dimensions, fixed_dimensions)
-            # tensor1_2d, tensor2_2d= self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
             self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
             print("tensor1_2d", self.tensor1_2d.shape)
             self.errors_dict = calculateDifference(self.tensor1_2d, self.tensor2_2d).tensor_difference_dict()
@@ -562,4 +549,4 @@ class HeatmapMultiDimenWindow(QWidget):
     
     def reset_graph(self):
         self.canvas.clear_canvas()
-        self.canvas.draw_heatmap(self.dropdown.currentText(), self.errors_dict, self.tensor1_2d, self.tensor2_2d)  # Call draw_heatmap with the current selected text
+        self.canvas.draw_heatmap(self.dropdown.currentText(), self.errors_dict, self.tensor1_2d, self.tensor2_2d)
