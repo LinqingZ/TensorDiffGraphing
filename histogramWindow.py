@@ -49,6 +49,40 @@ class calculateDifference:
         return errors_dict
 
 
+def divide_tensor(tensor_size, tile_size):
+    rows, cols = tensor_size
+    tile_rows, tile_cols = tile_size
+    
+    num_rows = rows // tile_rows
+    num_cols = cols // tile_cols
+    
+    remainder_rows = rows % tile_rows
+    remainder_cols = cols % tile_cols
+    
+    tiles = []
+    for i in range(num_rows):
+        for j in range(num_cols):
+            tile = (i * tile_rows, j * tile_cols, tile_rows, tile_cols)
+            tiles.append(tile)
+    
+    # Handle remaining partial view
+    if remainder_rows > 0:
+        for j in range(num_cols):
+            tile = (num_rows * tile_rows, j * tile_cols, remainder_rows, tile_cols)
+            tiles.append(tile)
+    
+    if remainder_cols > 0:
+        for i in range(num_rows):
+            tile = (i * tile_rows, num_cols * tile_cols, tile_rows, remainder_cols)
+            tiles.append(tile)
+    
+    if remainder_rows > 0 and remainder_cols > 0:
+        tile = (num_rows * tile_rows, num_cols * tile_cols, remainder_rows, remainder_cols)
+        tiles.append(tile)
+    
+    return tiles
+
+
 class CustomNavigationToolbar(NavigationToolbar):
     def __init__(self, canvas, window):
         super().__init__(canvas, window)
@@ -71,6 +105,8 @@ class Histogram2DimenWindow(QWidget):
         self.bin_size = None
         self.log_base = None
         self.original_xlim = None
+        self.tiles = None
+        self.current_data_tensor = None
         
         self.errors_dict = calculateDifference(self.tensor1, self.tensor2).tensor_difference_dict()
         self.figure = plt.figure()
@@ -84,11 +120,10 @@ class Histogram2DimenWindow(QWidget):
         self.slider.setValue(10)
         self.slider.valueChanged[int].connect(self.update_bin_size)
         
-        self.display_message_label = QLabel("Bin Size:")
         self.bin_size_textbox = QLineEdit('10')
         self.bin_size_textbox.textChanged.connect(self.update_bin_size_textbox)
         
-        self.plot_button = QPushButton('Plot Histogram')
+        self.plot_button = QPushButton('Plot Full Size Histogram')
         self.plot_button.clicked.connect(self.draw_histogram)
         
         self.dropdown = QComboBox(self)
@@ -108,7 +143,6 @@ class Histogram2DimenWindow(QWidget):
         left_layout.addRow(self.log_checkbox)
         left_layout.addRow(self.plot_button)
         
-        
         self.mean_label = QLabel()
         self.median_label = QLabel()
         self.max_label = QLabel()
@@ -117,6 +151,10 @@ class Histogram2DimenWindow(QWidget):
         self.percentiles_label_25 = QLabel()
         self.percentiles_label_50 = QLabel()
         self.percentiles_label_75 = QLabel()
+        self.tensor_size_label = QLabel()
+        
+        left_layout.addRow(QLabel("Large Tensor Size: "))
+        left_layout.addRow(self.tensor_size_label)
         
         left_layout.addRow(QLabel("<b>Min: </b>"))
         left_layout.addRow(self.min_label)
@@ -142,13 +180,73 @@ class Histogram2DimenWindow(QWidget):
         left_layout.addRow(QLabel("<b>Percentiles 75th: </b>"))
         left_layout.addRow(self.percentiles_label_75)
         
+        self.tensor_size = np.shape(self.tensor1)
+        self.label1 = QLabel('Select the size of the view (rows and columns):')
+        self.row_input = QLineEdit()
+        self.row_input.setText(str(self.tensor1.shape[0]))
+        
+        self.col_input = QLineEdit()
+        self.col_input.setText(str(self.tensor1.shape[1]))
+        
+        self.view_list_combo = QComboBox(self)        
+        
+        middle_layout = QFormLayout()
+        middle_layout.addRow(self.label1)
+        middle_layout.addRow(self.row_input, self.col_input)
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.clicked.connect(self.reset_button_clicked)        
+        
+        self.graph_view_button = QPushButton("Plot View Size Histogram")
+        self.graph_view_button.clicked.connect(self.graph_view_button_clicked)
+        
+        middle_layout.addRow(self.graph_view_button)
+        middle_layout.addRow(self.view_list_combo)
+        middle_layout.addRow(self.reset_button)
+        
+        self.mean_label_view = QLabel()
+        self.median_label_view  = QLabel()
+        self.max_label_view  = QLabel()
+        self.min_label_view  = QLabel()
+        self.std_label_view  = QLabel()
+        self.percentiles_label_25_view  = QLabel()
+        self.percentiles_label_50_view  = QLabel()
+        self.percentiles_label_75_view  = QLabel()
+        self.tensor_size_label_view  = QLabel()
+        
+        middle_layout.addRow(QLabel("Current Viewing Tensor Size: "))
+        middle_layout.addRow(self.tensor_size_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Min: </b>"))
+        middle_layout.addRow(self.min_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Max: </b>"))
+        middle_layout.addRow(self.max_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Median: </b>"))
+        middle_layout.addRow(self.median_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Mean (Average): </b>"))
+        middle_layout.addRow(self.mean_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Standard Deviation (SD): </b>"))
+        middle_layout.addRow(self.std_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Percentiles 25th: </b>"))
+        middle_layout.addRow(self.percentiles_label_25_view )
+        
+        middle_layout.addRow(QLabel("<b>Percentiles 50th: </b>"))
+        middle_layout.addRow(self.percentiles_label_50_view)
+        
+        middle_layout.addRow(QLabel("<b>Percentiles 75th: </b>"))
+        middle_layout.addRow(self.percentiles_label_75_view )
+        
         right_layout = QVBoxLayout()
         self.toolbar = CustomNavigationToolbar(self.canvas, self)
         right_layout.addWidget(self.toolbar)
         right_layout.addWidget(self.canvas)
         
-        
         inner_layout.addLayout(left_layout, 1)
+        inner_layout.addLayout(middle_layout, 1)
         inner_layout.addLayout(right_layout, 7)
         
         main_layout.addWidget(group_box_inner)
@@ -157,34 +255,123 @@ class Histogram2DimenWindow(QWidget):
         self.draw_histogram()
         self.showMaximized()
     
-    def update_statistics(self, data_tensor):
-        mean_value = np.mean(data_tensor)
-        median_value = np.median(data_tensor)
-        max_value = np.max(data_tensor)
-        # max_location = np.unravel_index(np.argmax(data_tensor), data_tensor.shape)
-        min_value = np.min(data_tensor)
-        # min_location = np.unravel_index(np.argmin(data_tensor), data_tensor.shape)
-        std_deviation = np.std(data_tensor)
-        # variance = np.var(data_tensor)
-        # percentiles = np.percentile(data_tensor, [25, 50, 75])
-        percentiles_25 = np.percentile(data_tensor, 25)
-        percentiles_50 = np.percentile(data_tensor, 50)
-        percentiles_75 = np.percentile(data_tensor, 75)
-
-        self.mean_label.setText(f"{mean_value:.10e}")
-        self.median_label.setText(f"{median_value:.10e}")
-        self.max_label.setText(f"{max_value:.10e}")
-        self.min_label.setText(f"{min_value:.10e}")
-        self.std_label.setText(f"{std_deviation:.10e}")
-        self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
-        self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
-        self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
+    def graph_view_button_clicked(self):
+        try:
+            view_size = self.updateResult()
+            
+            self.tiles= divide_tensor(self.errors_dict[self.dropdown.currentText()].shape, view_size)
+            view_list = []
+            for i in range(len(self.tiles)):
+                view_list.append(f"Tile {i} ({self.tiles[i][2]}x{self.tiles[i][3]})")
+            self.view_list_combo.clear()
+            self.view_list_combo.addItems(view_list)
+            self.view_list_combo.currentIndexChanged.connect(self.update_view_statistics)
+            self.view_list_combo.currentIndexChanged.connect(self.draw_view_histogram)
+            self.draw_view_histogram()
+        except ValueError:
+            print("Please select valid view sizes.")
+    
+    def reset_button_clicked(self):
+        # for dropdown in self.axis_dropdowns:
+        #     dropdown.setEnabled(True)
+        #     dropdown.setCurrentIndex(0)
+        # self.tiles = None
+        # self.current_data_tensor = None
+        self.row_input.setText(str(self.tensor1.shape[0]))
+        self.col_input.setText(str(self.tensor1.shape[1]))
+        self.log_checkbox.setChecked(False)
+        self.view_list_combo.clear()
+        self.dropdown.setCurrentIndex(0)
+        self.slider.setValue(10)
+        self.clean_labels()
+        self.clean_view_labels()
+        self.figure.clear()
+        self.canvas.draw()
+    
+    def updateResult(self):
+        row = self.row_input.text()
+        col = self.col_input.text()
+        view_size = (int(row), int(col))
+        return view_size
+    
+    
+    def update_view_statistics(self):
+        try:
+            i, j, rows, cols = self.tiles[self.view_list_combo.currentIndex()]
+            self.current_data_tensor = self.errors_dict[self.dropdown.currentText()][i:i+rows, j:j+cols]
+            mean_value = np.mean(self.current_data_tensor)
+            median_value = np.median(self.current_data_tensor)
+            max_value = np.max(self.current_data_tensor)
+            min_value = np.min(self.current_data_tensor)
+            std_deviation = np.std(self.current_data_tensor)
+            percentiles_25 = np.percentile(self.current_data_tensor, 25)
+            percentiles_50 = np.percentile(self.current_data_tensor, 50)
+            percentiles_75 = np.percentile(self.current_data_tensor, 75)
+            
+            self.mean_label_view.setText(f"{mean_value:.10e}")
+            self.median_label_view.setText(f"{median_value:.10e}")
+            self.max_label_view.setText(f"{max_value:.10e}")
+            self.min_label_view.setText(f"{min_value:.10e}")
+            self.std_label_view.setText(f"{std_deviation:.10e}")
+            self.percentiles_label_25_view.setText(f"{percentiles_25:.10e}")
+            self.percentiles_label_50_view.setText(f"{percentiles_50:.10e}")
+            self.percentiles_label_75_view.setText(f"{percentiles_75:.10e}")
+            self.tensor_size_label_view.setText(f"{self.current_data_tensor.shape}")
+        except:
+            self.clean_view_labels()
+    
+    def clean_view_labels(self):
+        self.mean_label_view.setText("")
+        self.median_label_view.setText("")
+        self.max_label_view.setText("")
+        self.min_label_view.setText("")
+        self.std_label_view.setText("")
+        self.percentiles_label_25_view.setText("")
+        self.percentiles_label_50_view.setText("")
+        self.percentiles_label_75_view.setText("")
+        self.tensor_size_label_view.setText("")
+    
+    
+    def update_statistics(self, text):
+        try:
+            data_tensor = self.errors_dict[text]
+            mean_value = np.mean(data_tensor)
+            median_value = np.median(data_tensor)
+            max_value = np.max(data_tensor)
+            min_value = np.min(data_tensor)
+            std_deviation = np.std(data_tensor)
+            percentiles_25 = np.percentile(data_tensor, 25)
+            percentiles_50 = np.percentile(data_tensor, 50)
+            percentiles_75 = np.percentile(data_tensor, 75)
+            
+            self.mean_label.setText(f"{mean_value:.10e}")
+            self.median_label.setText(f"{median_value:.10e}")
+            self.max_label.setText(f"{max_value:.10e}")
+            self.min_label.setText(f"{min_value:.10e}")
+            self.std_label.setText(f"{std_deviation:.10e}")
+            self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
+            self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
+            self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
+            self.tensor_size_label.setText(f"{self.tensor_size}")
+        except:
+            self.clean_labels()
+    
+    def clean_labels(self):
+        self.mean_label.setText("")
+        self.median_label.setText("")
+        self.max_label.setText("")
+        self.min_label.setText("")
+        self.std_label.setText("")
+        self.percentiles_label_25.setText("")
+        self.percentiles_label_50.setText("")
+        self.percentiles_label_75.setText("")
+        self.tensor_size_label.setText("")
     
     def update_log_base(self):
         if self.log_checkbox.isChecked():
             self.log_base = 10
         else:
-            self.log_base = None
+            self.log_base = 0
     
     def update_bin_size(self, bin_size):
         self.bin_size_textbox.setText(str(bin_size))
@@ -203,7 +390,6 @@ class Histogram2DimenWindow(QWidget):
                 (xlim[0] - event.xdata) * scale_factor + event.xdata,
                 (xlim[1] - event.xdata) * scale_factor + event.xdata
             )
-            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
             
             self.axes.set_xlim(new_xlim)
             self.canvas.draw()
@@ -214,10 +400,10 @@ class Histogram2DimenWindow(QWidget):
         self.axes = self.figure.add_subplot(111, projection="My_Axes")
         try:
             histogram_data = self.errors_dict[self.dropdown.currentText()]
-            if self.log_base != None:
+            if self.log_base == 10:
                 self.axes.set_yscale('log', base=self.log_base)
             frequencies, self.bins, patches = self.axes.hist(histogram_data.flatten(), bins=self.bin_size)
-            self.update_statistics(histogram_data)
+            self.update_statistics(self.dropdown.currentText())
             if self.original_xlim is None:
                 self.original_xlim = self.axes.get_xlim()
             
@@ -231,7 +417,46 @@ class Histogram2DimenWindow(QWidget):
             for patch, color in zip(patches, bin_colors):
                 patch.set_facecolor(color)
         except Exception as e:
-            print("Error creating histogram:", e)
+            print("Error creating histogram2:", e)
+            return
+        
+        # Create the mplcursors cursor
+        cursor = mplcursors.cursor(patches, hover=True)
+        # Define the annotation function
+        @cursor.connect("add")
+        def on_hover(sel):
+            sel.annotation.set_text(f"Range: [{sel.artist[sel.index].get_x()}, {sel.artist[sel.index].get_x() + sel.artist[sel.index].get_width()}]\nFrequency: {int(frequencies[sel.index])}")
+        min_bin = min(self.bins)
+        max_bin = max(self.bins)
+        self.axes.set(xlim=(min_bin, max_bin), ylim=(0, None), autoscale_on=False)
+        
+        self.canvas.mpl_connect('scroll_event', self.zoom_graph)
+        self.canvas.draw()
+    
+    def draw_view_histogram(self):
+        self.figure.clear()
+        self.bin_size = int(self.bin_size_textbox.text())
+        self.axes = self.figure.add_subplot(111, projection="My_Axes")
+        try:
+            self.update_view_statistics()
+            histogram_data = self.current_data_tensor
+            if self.log_base == 10:
+                self.axes.set_yscale('log', base=self.log_base)
+            frequencies, self.bins, patches = self.axes.hist(histogram_data.flatten(), bins=self.bin_size)
+            if self.original_xlim is None:
+                self.original_xlim = self.axes.get_xlim()
+            
+            self.axes.set_xlabel('Value')
+            self.axes.set_ylabel('Frequency')
+            self.axes.set_title('Histogram')
+            
+            # Assign different colors to each bin
+            cmap = plt.get_cmap('viridis')
+            bin_colors = cmap(np.linspace(0, 1, len(patches)))
+            for patch, color in zip(patches, bin_colors):
+                patch.set_facecolor(color)
+        except Exception as e:
+            print("Error creating histogram1:", e)
             return
         
         # Create the mplcursors cursor
@@ -274,7 +499,7 @@ class Canvas(FigureCanvas):
         self.axes = self.figure.add_subplot(111, projection="My_Axes")
         histogram_data = errors_dict[text]
         try:
-            if log_base != None:
+            if log_base == 10:
                 self.axes.set_yscale('log', base=log_base)
             frequencies, bins, patches = self.axes.hist(histogram_data.flatten(), bins=bin_size)
             if self.original_xlim is None:
@@ -290,7 +515,48 @@ class Canvas(FigureCanvas):
             for patch, color in zip(patches, bin_colors):
                 patch.set_facecolor(color)
         except Exception as e:
-            print("Error creating heatmap:", e)
+            print("Error creating histogram: 4", e)
+            return
+        
+        # Create the mplcursors cursor
+        cursor = mplcursors.cursor(patches, hover=True)
+        # Define the annotation function
+        @cursor.connect("add")
+        def on_hover(sel):
+            sel.annotation.set_text(f"Range: [{sel.artist[sel.index].get_x()}, {sel.artist[sel.index].get_x() + sel.artist[sel.index].get_width()}]\nFrequency: {int(frequencies[sel.index])}")
+        
+        min_bin = min(bins)
+        max_bin = max(bins)
+        self.axes.set(xlim=(min_bin, max_bin), ylim=(0, None), autoscale_on=False)
+        
+        self.mpl_connect('scroll_event', self.zoom_graph)
+        self.draw()
+    
+    def draw_view_histogram(self, data, tiles, index, bin_size, log_base):
+        self.clear_canvas()
+        self.axes = self.figure.add_subplot(111, projection="My_Axes")
+        
+        i, j, rows, cols = tiles[index]
+        
+        histogram_data = data[i:i+rows, j:j+cols]
+        try:
+            if log_base == 10:
+                self.axes.set_yscale('log', base=log_base)
+            frequencies, bins, patches = self.axes.hist(histogram_data.flatten(), bins=bin_size)
+            if self.original_xlim is None:
+                self.original_xlim = self.axes.get_xlim()
+            
+            self.axes.set_xlabel('Value')
+            self.axes.set_ylabel('Frequency')
+            self.axes.set_title('Histogram')
+            
+            # Assign different colors to each bin
+            cmap = plt.get_cmap('viridis')
+            bin_colors = cmap(np.linspace(0, 1, len(patches)))
+            for patch, color in zip(patches, bin_colors):
+                patch.set_facecolor(color)
+        except Exception as e:
+            print("Error creating histogram 2:", e)
             return
         
         # Create the mplcursors cursor
@@ -315,9 +581,9 @@ class Canvas(FigureCanvas):
                 (xlim[0] - event.xdata) * scale_factor + event.xdata,
                 (xlim[1] - event.xdata) * scale_factor + event.xdata
             )
-            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
             self.axes.set_xlim(new_xlim)
             self.draw()
+
 
 class HistogramMultiDimenWindow(QWidget):
     def __init__(self, tensor1, tensor2):
@@ -331,6 +597,7 @@ class HistogramMultiDimenWindow(QWidget):
         self.checkboxes = []
         self.axis_dropdowns = []
         self.selected_checkboxes = []
+        self.tiles = None
         
         self.canvas = Canvas()
         main_layout = QVBoxLayout(self)
@@ -373,38 +640,187 @@ class HistogramMultiDimenWindow(QWidget):
         select_dimen_layout.addRow(self.percentiles_label_75)
         
         
-        group_box_layout.addLayout(select_dimen_layout, 1)
+        self.label1 = QLabel('Select the size of the view (rows and columns):')
+        self.row_input = QLineEdit()
+        self.row_input.setText(str(self.tensor1.shape[0]))
+        self.col_input = QLineEdit()
+        self.col_input.setText(str(self.tensor1.shape[1]))
+        self.view_list_combo = QComboBox(self) 
+        
+        middle_layout = QFormLayout()
+        middle_layout.addRow(self.label1)
+        middle_layout.addRow(self.row_input, self.col_input)
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.clicked.connect(self.reset_button_clicked)
+        self.graph_view_button = QPushButton("Plot View Size Histogram")
+        self.graph_view_button.clicked.connect(self.graph_view_button_clicked)
+        middle_layout.addRow(self.graph_view_button)
+        middle_layout.addRow(self.view_list_combo)
+        middle_layout.addRow(self.reset_button)
+        self.mean_label_view = QLabel()
+        self.median_label_view  = QLabel()
+        self.max_label_view  = QLabel()
+        self.min_label_view  = QLabel()
+        self.std_label_view  = QLabel()
+        self.percentiles_label_25_view  = QLabel()
+        self.percentiles_label_50_view  = QLabel()
+        self.percentiles_label_75_view  = QLabel()
+        self.tensor_size_label_view  = QLabel()
+        
+        middle_layout.addRow(QLabel("Current Viewing Tensor Size: "))
+        middle_layout.addRow(self.tensor_size_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Min: </b>"))
+        middle_layout.addRow(self.min_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Max: </b>"))
+        middle_layout.addRow(self.max_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Median: </b>"))
+        middle_layout.addRow(self.median_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Mean (Average): </b>"))
+        middle_layout.addRow(self.mean_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Standard Deviation (SD): </b>"))
+        middle_layout.addRow(self.std_label_view )
+        
+        middle_layout.addRow(QLabel("<b>Percentiles 25th: </b>"))
+        middle_layout.addRow(self.percentiles_label_25_view )
+        
+        middle_layout.addRow(QLabel("<b>Percentiles 50th: </b>"))
+        middle_layout.addRow(self.percentiles_label_50_view)
+        
+        middle_layout.addRow(QLabel("<b>Percentiles 75th: </b>"))
+        middle_layout.addRow(self.percentiles_label_75_view )
+        
         canvas_layout = QVBoxLayout()
         canvas_layout.addWidget(self.toolbar)
-        canvas_layout.addWidget(self.canvas) 
-        
+        canvas_layout.addWidget(self.canvas)
+        group_box_layout.addLayout(select_dimen_layout, 1)
+        group_box_layout.addLayout(middle_layout, 1)
         group_box_layout.addLayout(canvas_layout, 7)
         
         main_layout.addWidget(group_box)
         self.showMaximized()
+    
+    def graph_view_button_clicked(self):
+        if len(self.selected_checkboxes) == 2:
+            selected_dimensions = []
+            for checkbox in self.selected_checkboxes:
+                dimension_index = self.checkboxes.index(checkbox)
+                selected_dimensions.append(dimension_index)
+            
+            all_dimensions = list(range(len(self.checkboxes)))
+            all_axes = [self.axis_dropdowns[i].currentIndex() for i in range(len(self.checkboxes))]
+            
+            remaining_dimensions = [dim for dim in all_dimensions if dim not in selected_dimensions]
+            remaining_axes = [all_axes[dim] for dim in remaining_dimensions]
+            fixed_dimensions = dict(zip(remaining_dimensions, remaining_axes))
+            tensor1_2d, tensor2_2d= self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
+            self.errors_dict = calculateDifference(tensor1_2d, tensor2_2d).tensor_difference_dict()
+            view_size = self.updateResult()
+            self.tiles= divide_tensor(self.errors_dict[self.dropdown.currentText()].shape, view_size)
+            view_list = []
+            for i in range(len(self.tiles)):
+                view_list.append(f"Tile {i} ({self.tiles[i][2]}x{self.tiles[i][3]})")
+            self.view_list_combo.clear()
+            self.view_list_combo.addItems(view_list)
+            self.view_list_combo.currentIndexChanged.connect(self.update_view_statistics)
+            
+            histogram_data = self.errors_dict[self.dropdown.currentText()]
+            if self.bin_size_textbox.text().isdigit():
+                self.bin_size = int(self.bin_size_textbox.text())
+                self.slider.setValue(self.bin_size)
+            if self.log_checkbox.isChecked():
+                    self.log_base = 10
+            else:
+                self.log_base = 0
+            
+            self.view_list_combo.currentIndexChanged.connect(lambda index: self.canvas.draw_view_histogram(histogram_data, self.tiles, index, self.bin_size, self.log_base))
+            self.canvas.draw_view_histogram(histogram_data, self.tiles, self.view_list_combo.currentIndex(), self.bin_size, self.log_base)
+            
+            self.update_view_statistics()
         
-    def update_statistics(self, data_tensor):
-        mean_value = np.mean(data_tensor)
-        median_value = np.median(data_tensor)
-        max_value = np.max(data_tensor)
-        # max_location = np.unravel_index(np.argmax(data_tensor), data_tensor.shape)
-        min_value = np.min(data_tensor)
-        # min_location = np.unravel_index(np.argmin(data_tensor), data_tensor.shape)
-        std_deviation = np.std(data_tensor)
-        # variance = np.var(data_tensor)
-        # percentiles = np.percentile(data_tensor, [25, 50, 75])
-        percentiles_25 = np.percentile(data_tensor, 25)
-        percentiles_50 = np.percentile(data_tensor, 50)
-        percentiles_75 = np.percentile(data_tensor, 75)
+        else:
+            QMessageBox.warning(self, "Graph", "Please select exactly two checkboxes and valid view sizes.")
+    
+    
+    def updateResult(self):
+        row = self.row_input.text()
+        col = self.col_input.text()
+        
+        view_size = (int(row), int(col))
+        return view_size
+    
+    def update_statistics(self, text):
+        try:
+            data_tensor = self.errors_dict[text]
+            mean_value = np.mean(data_tensor)
+            median_value = np.median(data_tensor)
+            max_value = np.max(data_tensor)
+            min_value = np.min(data_tensor)
+            std_deviation = np.std(data_tensor)
+            percentiles_25 = np.percentile(data_tensor, 25)
+            percentiles_50 = np.percentile(data_tensor, 50)
+            percentiles_75 = np.percentile(data_tensor, 75)
 
-        self.mean_label.setText(f"{mean_value:.10e}")
-        self.median_label.setText(f"{median_value:.10e}")
-        self.max_label.setText(f"{max_value:.10e}")
-        self.min_label.setText(f"{min_value:.10e}")
-        self.std_label.setText(f"{std_deviation:.10e}")
-        self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
-        self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
-        self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
+            self.mean_label.setText(f"{mean_value:.10e}")
+            self.median_label.setText(f"{median_value:.10e}")
+            self.max_label.setText(f"{max_value:.10e}")
+            self.min_label.setText(f"{min_value:.10e}")
+            self.std_label.setText(f"{std_deviation:.10e}")
+            self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
+            self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
+            self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
+        except:
+            self.clean_labels()
+    
+    def update_view_statistics(self):
+        try:
+            i, j, rows, cols = self.tiles[self.view_list_combo.currentIndex()]
+            self.current_data_tensor = self.errors_dict[self.dropdown.currentText()][i:i+rows, j:j+cols]
+            mean_value = np.mean(self.current_data_tensor)
+            median_value = np.median(self.current_data_tensor)
+            max_value = np.max(self.current_data_tensor)
+            min_value = np.min(self.current_data_tensor)
+            std_deviation = np.std(self.current_data_tensor)
+            percentiles_25 = np.percentile(self.current_data_tensor, 25)
+            percentiles_50 = np.percentile(self.current_data_tensor, 50)
+            percentiles_75 = np.percentile(self.current_data_tensor, 75)
+            
+            self.mean_label_view.setText(f"{mean_value:.10e}")
+            self.median_label_view.setText(f"{median_value:.10e}")
+            self.max_label_view.setText(f"{max_value:.10e}")
+            self.min_label_view.setText(f"{min_value:.10e}")
+            self.std_label_view.setText(f"{std_deviation:.10e}")
+            self.percentiles_label_25_view.setText(f"{percentiles_25:.10e}")
+            self.percentiles_label_50_view.setText(f"{percentiles_50:.10e}")
+            self.percentiles_label_75_view.setText(f"{percentiles_75:.10e}")
+            self.tensor_size_label_view.setText(f"{self.current_data_tensor.shape}")
+        except:
+            self.clean_view_labels()
+    
+    def clean_labels(self):
+        self.mean_label.setText("")
+        self.median_label.setText("")
+        self.max_label.setText("")
+        self.min_label.setText("")
+        self.std_label.setText("")
+        self.percentiles_label_25.setText("")
+        self.percentiles_label_50.setText("")
+        self.percentiles_label_75.setText("")
+    
+    def clean_view_labels(self):
+        self.mean_label_view.setText("")
+        self.median_label_view.setText("")
+        self.max_label_view.setText("")
+        self.min_label_view.setText("")
+        self.std_label_view.setText("")
+        self.percentiles_label_25_view.setText("")
+        self.percentiles_label_50_view.setText("")
+        self.percentiles_label_75_view.setText("")
+        self.tensor_size_label_view.setText("")
     
     def slice_2d_tensor(self, selected_dimensions, fixed_dimensions):
         num_dims = self.tensor1.ndim
@@ -412,9 +828,7 @@ class HistogramMultiDimenWindow(QWidget):
         for i in range(num_dims):
             if i not in selected_dimensions: 
                 indices[i] = fixed_dimensions[i]
-        print("selected_dimensions", selected_dimensions)
-        print("fixed_dimensions", fixed_dimensions)
-        print("indices", indices)
+        
         tensor1_2d = self.tensor1[tuple(indices)]
         tensor2_2d = self.tensor2[tuple(indices)]
         return tensor1_2d, tensor2_2d
@@ -445,9 +859,8 @@ class HistogramMultiDimenWindow(QWidget):
         self.bin_size_textbox = QLineEdit('10')
         self.bin_size_textbox.textChanged.connect(self.update_bin_size_textbox)
         
-        self.graph_button = QPushButton("Plot Histogram")
+        self.graph_button = QPushButton("Plot Full Size Histogram")
         self.graph_button.clicked.connect(self.graph_button_clicked)
-        # self.graph_button.clicked.connect(self.update_statistics(self.errors_dict[self.dropdown.currentText()]))
         
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.reset_button_clicked)
@@ -475,7 +888,7 @@ class HistogramMultiDimenWindow(QWidget):
         if self.log_checkbox.isChecked():
             self.log_base = 10
         else:
-            self.log_base = None
+            self.log_base = 0
     
     def update_bin_size(self, bin_size):
         self.bin_size_textbox.setText(str(bin_size))
@@ -530,12 +943,10 @@ class HistogramMultiDimenWindow(QWidget):
             remaining_dimensions = [dim for dim in all_dimensions if dim not in selected_dimensions]
             remaining_axes = [all_axes[dim] for dim in remaining_dimensions]
             fixed_dimensions = dict(zip(remaining_dimensions, remaining_axes))
-            print("selected_dimensions, fixed_dimensions", selected_dimensions, fixed_dimensions)
             tensor1_2d, tensor2_2d= self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
-            print("tensor1_2d", tensor1_2d.shape)
             self.errors_dict = calculateDifference(tensor1_2d, tensor2_2d).tensor_difference_dict()
             self.canvas.draw_histogram(self.dropdown.currentText(), self.errors_dict, self.bin_size, self.log_base)
-            self.update_statistics(self.errors_dict[self.dropdown.currentText()])
+            self.update_statistics(self.dropdown.currentText())
         else:
             QMessageBox.warning(self, "Graph", "Please select exactly two checkboxes.")
     
@@ -545,7 +956,10 @@ class HistogramMultiDimenWindow(QWidget):
         for dropdown in self.axis_dropdowns:
             dropdown.setEnabled(True)
             dropdown.setCurrentIndex(0)
+        self.log_checkbox.setChecked(False)
+        self.dropdown.setCurrentIndex(0)
         self.selected_checkboxes.clear()
+        self.clean_labels()
         self.errors_dict = {}
         self.slider.setValue(10)
         self.canvas.clear_canvas()
@@ -553,4 +967,4 @@ class HistogramMultiDimenWindow(QWidget):
     def reset_graph(self):
         self.canvas.clear_canvas()
         self.canvas.draw_histogram(self.dropdown.currentText(), self.errors_dict, self.bin_size, self.log_base)
-        self.update_statistics(self.errors_dict[self.dropdown.currentText()])
+        self.update_statistics(self.dropdown.currentText())

@@ -61,7 +61,7 @@ class Heatmap2DimenWindow(QWidget):
         self.original_ylim = None
         
         self.errors_dict = calculateDifference(self.tensor1, self.tensor2).tensor_difference_dict()
-        self.figure = plt.figure()
+        self.figure = plt.figure(figsize=(10, 5))
         self.canvas = FigureCanvas(self.figure)
         
         self.dropdown = QComboBox(self)
@@ -71,8 +71,8 @@ class Heatmap2DimenWindow(QWidget):
         self.color_button = QPushButton("Change Color")
         self.color_button.clicked.connect(self.change_color)
         
-        self.color_scale_checkbox = QCheckBox('Scale Color')
-        self.color_scale_checkbox.stateChanged.connect(self.scale_color)
+        self.scale_color_checkbox = QCheckBox('Scale Color')
+        self.scale_color_checkbox.stateChanged.connect(self.scale_color)
         
         main_layout = QVBoxLayout(self)
         
@@ -81,7 +81,7 @@ class Heatmap2DimenWindow(QWidget):
         left_layout = QFormLayout()
         left_layout.addRow(self.dropdown)
         left_layout.addRow(self.color_button)
-        left_layout.addRow(self.color_scale_checkbox)
+        left_layout.addRow(self.scale_color_checkbox)
         
         
         self.mean_label = QLabel()
@@ -132,7 +132,7 @@ class Heatmap2DimenWindow(QWidget):
         self.showMaximized()
     
     def scale_color(self):
-        if self.color_scale_checkbox.isChecked:
+        if self.scale_color_checkbox.isChecked:
             self.draw_heatmap(self.dropdown.currentText())
     
     def update_statistics(self, data_tensor):
@@ -144,7 +144,7 @@ class Heatmap2DimenWindow(QWidget):
         percentiles_25 = np.percentile(data_tensor, 25)
         percentiles_50 = np.percentile(data_tensor, 50)
         percentiles_75 = np.percentile(data_tensor, 75)
-
+        
         self.mean_label.setText(f"{mean_value:.10e}")
         self.median_label.setText(f"{median_value:.10e}")
         self.max_label.setText(f"{max_value:.10e}")
@@ -161,7 +161,7 @@ class Heatmap2DimenWindow(QWidget):
             heatmap_data = self.errors_dict[text]
             self.update_statistics(heatmap_data)
             if heatmap_data.shape[0] > 0 and heatmap_data.shape[1] > 0:
-                if self.color_scale_checkbox.isChecked():
+                if self.scale_color_checkbox.isChecked():
                     self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1, norm=LogNorm())
                 else:
                     self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1)
@@ -226,9 +226,6 @@ class Heatmap2DimenWindow(QWidget):
                 (ylim[1] - event.ydata) * scale_factor + event.ydata
             )
             
-            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
-            new_ylim = (min(self.original_ylim[0], new_ylim[0]), max(self.original_ylim[1], new_ylim[1]))
-            
             # Set the new limits to the heatmap
             self.axes.set_xlim((new_xlim[0], new_xlim[1]))
             self.axes.set_ylim((new_ylim[0], new_ylim[1]))
@@ -239,7 +236,7 @@ class Heatmap2DimenWindow(QWidget):
 
 class Canvas(FigureCanvas):
     def __init__(self, parent=None):
-        self.figure = Figure()
+        self.figure = Figure(figsize=(10, 5))
         super().__init__(self.figure)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.axes = self.figure.add_subplot(111)
@@ -270,7 +267,7 @@ class Canvas(FigureCanvas):
                     self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1, norm=LogNorm())
                 else:
                     self.heatmap = self.axes.imshow(heatmap_data, cmap='coolwarm', interpolation='nearest', aspect=1)
-
+                
                 # Store the original heatmap data's range
                 if self.original_xlim is None:
                     self.original_xlim = self.axes.get_xlim()
@@ -323,13 +320,11 @@ class Canvas(FigureCanvas):
                 (ylim[1] - event.ydata) * scale_factor + event.ydata
             )
             
-            new_xlim = (max(self.original_xlim[0], new_xlim[0]), min(self.original_xlim[1], new_xlim[1]))
-            new_ylim = (min(self.original_ylim[0], new_ylim[0]), max(self.original_ylim[1], new_ylim[1]))
-            
             self.axes.set_xlim(new_xlim)
             self.axes.set_ylim(new_ylim)
             
             self.draw()
+
 
 class HeatmapMultiDimenWindow(QWidget):
     def __init__(self, tensor1, tensor2):
@@ -406,36 +401,45 @@ class HeatmapMultiDimenWindow(QWidget):
         group_box_layout.addLayout(canvas_layout)
         
         self.dropdown.currentTextChanged.connect(lambda text: self.canvas.draw_heatmap(text, self.errors_dict, self.tensor1_2d, self.tensor2_2d))
-        self.dropdown.currentTextChanged.connect(lambda text: self.update_statistics(self.errors_dict[text]))
+        self.dropdown.currentTextChanged.connect(lambda text: self.update_statistics(text))
         self.color_button.clicked.connect(self.canvas.change_color)
         self.scale_color_checkbox.stateChanged.connect(self.change_color_scale)
-        
         
         main_layout.addWidget(group_box)
         self.showMaximized()
     
-    def update_statistics(self, data_tensor):
-        mean_value = np.mean(data_tensor)
-        median_value = np.median(data_tensor)
-        max_value = np.max(data_tensor)
-        # max_location = np.unravel_index(np.argmax(data_tensor), data_tensor.shape)
-        min_value = np.min(data_tensor)
-        # min_location = np.unravel_index(np.argmin(data_tensor), data_tensor.shape)
-        std_deviation = np.std(data_tensor)
-        # variance = np.var(data_tensor)
-        # percentiles = np.percentile(data_tensor, [25, 50, 75])
-        percentiles_25 = np.percentile(data_tensor, 25)
-        percentiles_50 = np.percentile(data_tensor, 50)
-        percentiles_75 = np.percentile(data_tensor, 75)
-
-        self.mean_label.setText(f"{mean_value:.10e}")
-        self.median_label.setText(f"{median_value:.10e}")
-        self.max_label.setText(f"{max_value:.10e}")
-        self.min_label.setText(f"{min_value:.10e}")
-        self.std_label.setText(f"{std_deviation:.10e}")
-        self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
-        self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
-        self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
+    def update_statistics(self, text):
+        try:
+            data_tensor = self.errors_dict[text]
+            mean_value = np.mean(data_tensor)
+            median_value = np.median(data_tensor)
+            max_value = np.max(data_tensor)
+            min_value = np.min(data_tensor)
+            std_deviation = np.std(data_tensor)
+            percentiles_25 = np.percentile(data_tensor, 25)
+            percentiles_50 = np.percentile(data_tensor, 50)
+            percentiles_75 = np.percentile(data_tensor, 75)
+            
+            self.mean_label.setText(f"{mean_value:.10e}")
+            self.median_label.setText(f"{median_value:.10e}")
+            self.max_label.setText(f"{max_value:.10e}")
+            self.min_label.setText(f"{min_value:.10e}")
+            self.std_label.setText(f"{std_deviation:.10e}")
+            self.percentiles_label_25.setText(f"{percentiles_25:.10e}")
+            self.percentiles_label_50.setText(f"{percentiles_50:.10e}")
+            self.percentiles_label_75.setText(f"{percentiles_75:.10e}")
+        except:
+            self.clean_labels()
+    
+    def clean_labels(self):
+        self.mean_label.setText("")
+        self.median_label.setText("")
+        self.max_label.setText("")
+        self.min_label.setText("")
+        self.std_label.setText("")
+        self.percentiles_label_25.setText("")
+        self.percentiles_label_50.setText("")
+        self.percentiles_label_75.setText("")
     
     def change_color_scale(self):
         if self.scale_color_checkbox.isChecked():
@@ -450,9 +454,6 @@ class HeatmapMultiDimenWindow(QWidget):
         for i in range(num_dims):
             if i not in selected_dimensions: 
                 indices[i] = fixed_dimensions[i]
-        print("selected_dimensions", selected_dimensions)
-        print("fixed_dimensions", fixed_dimensions)
-        print("indices", indices)
         self.tensor1_2d = self.tensor1[tuple(indices)]
         self.tensor2_2d = self.tensor2[tuple(indices)]
     
@@ -528,12 +529,10 @@ class HeatmapMultiDimenWindow(QWidget):
             remaining_dimensions = [dim for dim in all_dimensions if dim not in selected_dimensions]
             remaining_axes = [all_axes[dim] for dim in remaining_dimensions]
             fixed_dimensions = dict(zip(remaining_dimensions, remaining_axes))
-            print("selected_dimensions, fixed_dimensions", selected_dimensions, fixed_dimensions)
             self.slice_2d_tensor(selected_dimensions, fixed_dimensions)
-            print("tensor1_2d", self.tensor1_2d.shape)
             self.errors_dict = calculateDifference(self.tensor1_2d, self.tensor2_2d).tensor_difference_dict()
             self.canvas.draw_heatmap(self.dropdown.currentText(), self.errors_dict, self.tensor1_2d, self.tensor2_2d)
-            self.update_statistics(self.errors_dict[self.dropdown.currentText()])
+            self.update_statistics(self.dropdown.currentText())
         else:
             QMessageBox.warning(self, "Graph", "Please select exactly two checkboxes.")
     
@@ -543,6 +542,9 @@ class HeatmapMultiDimenWindow(QWidget):
         for dropdown in self.dropdowns:
             dropdown.setEnabled(True)
             dropdown.setCurrentIndex(0)
+        self.dropdown.setCurrentIndex(0)
+        self.scale_color_checkbox.setChecked(False)
+        self.clean_labels()
         self.selected_checkboxes.clear()
         self.errors_dict = {}
         self.canvas.clear_canvas()
